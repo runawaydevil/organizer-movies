@@ -1,0 +1,158 @@
+# Movie Organizer - Git Ignore File
+# Author: Pablo Murad (runawaydevil)
+# Repository: https://github.com/runawaydevil/organizer-movies.git
+
+# ===========================================
+# CRITICAL: API Keys and Sensitive Data
+# ===========================================
+# NEVER commit these files - they contain real API keys!
+config.json
+api_keys.json
+tmdb_config.json
+openai_config.json
+user_config.json
+*.config.json
+*_config.json
+
+# Secure Configuration Directories (Local storage only)
+# Windows: %LOCALAPPDATA%/MovieOrganizer/
+# Linux: ~/.config/movie-organizer/
+**/MovieOrganizer/
+**/.config/movie-organizer/
+**/AppData/Local/MovieOrganizer/
+
+# ===========================================
+# Build and Distribution Files
+# ===========================================
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Release packages
+release/
+*.exe
+*.msi
+*.deb
+*.rpm
+*.dmg
+
+# Version info files
+version_info.txt
+
+# ===========================================
+# Generated Reports and Database
+# ===========================================
+organized_movies.json
+organized_movies_report.pdf
+*.pdf
+movie_database.json
+organized_movies.db
+
+# ===========================================
+# Cache and Temporary Files
+# ===========================================
+tmdb_cache.json
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ===========================================
+# Logs and Debug Files
+# ===========================================
+*.log
+movie_organizer.log
+debug.log
+error.log
+*.log.*
+
+# ===========================================
+# IDE and Editor Files
+# ===========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ===========================================
+# OS Generated Files
+# ===========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===========================================
+# Virtual Environment
+# ===========================================
+venv/
+env/
+ENV/
+.env
+.venv/
+venv*/
+env*/
+
+# ===========================================
+# Test Files and Data
+# ===========================================
+test_*.py
+*_test.py
+tests/test_*.py
+test_data/
+temp/
+tmp/
+testing/
+
+# ===========================================
+# User-specific Configuration
+# ===========================================
+user_settings.json
+personal_config.json
+local_config.json
+my_config.json
+
+# ===========================================
+# Backup and Temporary Files
+# ===========================================
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+*.tmp
+*.temp
+
+# ===========================================
+# Documentation Build
+# ===========================================
+docs/_build/
+site/
+_site/
+
+# ===========================================
+# Package Managers
+# ===========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock

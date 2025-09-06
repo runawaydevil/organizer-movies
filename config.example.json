@@ -1,0 +1,28 @@
+{
+  "openai_api_key": "YOUR_OPENAI_API_KEY_HERE",
+  "openai_model": "gpt-3.5-turbo",
+  "rate_limit_delay": 1.0,
+  "max_retries": 3,
+  "network_retry_attempts": 3,
+  "network_retry_delay": 1.0,
+  "network_timeout": 30.0,
+  "file_naming_pattern": "{title} ({year}){extension}",
+  "folder_naming_pattern": "{title} ({year})",
+  "max_filename_length": 200,
+  "continue_on_error": true,
+  "log_detailed_errors": true,
+  "show_error_details": true,
+  "video_extensions": [
+    ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm",
+    ".m4v", ".3gp", ".ogv", ".ts", ".m2ts", ".mts"
+  ],
+  "tmdb_config": {
+    "enabled": false,
+    "api_key": "YOUR_TMDB_API_KEY_HERE",
+    "bearer_token": "YOUR_TMDB_BEARER_TOKEN_HERE",
+    "use_original_titles": true,
+    "language": "en-US",
+    "cache_duration_days": 7,
+    "rate_limit_delay": 0.25
+  }
+}
