@@ -86,6 +86,7 @@ error.log
 .project
 .pydevproject
 .settings/
+.kiro
 
 # ===========================================
 # OS Generated Files
