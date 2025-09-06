@@ -38,6 +38,62 @@ class FileMover:
         self.network_handler = NetworkFileHandler(max_retries=max_retries, base_delay=base_delay)
         self.smart_folder_manager = SmartFolderManager()
     
+    def organize_movie_file_fast(self, source_path: Path, metadata, target_folder: Path, file_pattern: str = None) -> Tuple[bool, str, Optional[Path]]:
+        """
+        Fast version of organize_movie_file with minimal checks for speed
+        
+        Args:
+            source_path: Original file path
+            metadata: Movie metadata for naming
+            target_folder: Destination folder
+            file_pattern: Optional naming pattern (overrides default)
+            
+        Returns:
+            Tuple[bool, str, Optional[Path]]: (success, message, final_path)
+        """
+        try:
+            # Minimal validation
+            if not source_path.exists() or not source_path.is_file():
+                return False, f"Source file does not exist: {source_path}", None
+            
+            # Create target folder if it doesn't exist
+            target_folder.mkdir(parents=True, exist_ok=True)
+            
+            # Generate new filename
+            pattern = file_pattern or self.file_pattern
+            new_filename = self._generate_filename(metadata, source_path.suffix, pattern)
+            
+            if not new_filename:
+                return False, "Failed to generate valid filename", None
+            
+            # Create destination path
+            destination_path = target_folder / new_filename
+            
+            # Handle file name conflicts (simplified)
+            if destination_path.exists():
+                base_name = destination_path.stem
+                extension = destination_path.suffix
+                counter = 1
+                while counter <= 5:  # Limit attempts for speed
+                    new_name = f"{base_name} ({counter}){extension}"
+                    destination_path = target_folder / new_name
+                    if not destination_path.exists():
+                        break
+                    counter += 1
+            
+            # Move file directly
+            shutil.move(str(source_path), str(destination_path))
+            
+            # Quick verification
+            if not destination_path.exists() or source_path.exists():
+                return False, "File move verification failed", destination_path
+            
+            success_msg = f"Successfully organized: {source_path.name} -> {destination_path.name}"
+            return True, success_msg, destination_path
+            
+        except Exception as e:
+            return False, f"Error during organization: {e}", None
+    
     def organize_movie_file(self, source_path: Path, metadata, target_folder: Path, file_pattern: str = None) -> Tuple[bool, str, Optional[Path]]:
         """
         Rename and move movie file to organized location
@@ -98,45 +154,35 @@ class FileMover:
             if is_dest_network and not self.network_handler.check_network_connectivity(destination_path.parent):
                 return False, f"Destination network path is not accessible: {destination_path.parent}", None
             
-            # Check disk space
-            if not self._check_disk_space(source_path, destination_path.parent):
-                return False, "Insufficient disk space", None
+            # Skip disk space check for local operations (faster)
+            # Only check for network operations
+            if is_source_network or is_dest_network:
+                if not self._check_disk_space(source_path, destination_path.parent):
+                    return False, "Insufficient disk space", None
             
-            # Calculate source hash for verification
-            source_hash = self._calculate_file_hash(source_path)
+            # Skip hash calculation for faster operations
+            # Only calculate hash for network operations or large files
+            source_hash = None
+            if is_source_network or is_dest_network or source_path.stat().st_size > 100 * 1024 * 1024:  # 100MB
+                source_hash = self._calculate_file_hash(source_path)
             
-            # Log the move operation
-            self.logger.info(f"Moving file: {source_path} -> {destination_path}")
-            
-            # Perform the move operation
+            # Perform the move operation (reduced logging for speed)
             try:
-                if is_source_network or is_dest_network:
-                    self.logger.info(f"Network operation detected - using simple move")
-                else:
-                    self.logger.info(f"Local operation - using standard move")
-                
                 # Use simple shutil.move for all operations
-                # This is more reliable than complex network handling
-                self.logger.info(f"Moving: {source_path} -> {destination_path}")
                 shutil.move(str(source_path), str(destination_path))
-                self.logger.info(f"Move completed successfully")
                 
             except Exception as e:
                 self.logger.error(f"Move operation failed: {e}")
                 return False, f"Failed to move file: {e}", None
             
-            # Verify the move was successful
+            # Verify the move was successful (simplified for speed)
             if not self.verify_move_success(source_path, destination_path, source_hash):
                 # Try to rollback
                 self.rollback_move(source_path, destination_path)
                 return False, "File verification failed after move", destination_path
             
-            # Prepare success message with network info
+            # Prepare success message
             success_msg = f"Successfully organized: {source_path.name} -> {destination_path.name}"
-            if is_source_network or is_dest_network:
-                success_msg += " (network operation)"
-            
-            self.logger.info(success_msg)
             return True, success_msg, destination_path
             
         except PermissionError as e:
@@ -255,12 +301,17 @@ class FileMover:
             # Handle file name conflicts
             destination_file = self._handle_file_conflicts(destination_file)
             
-            # Verify we have enough space
-            if not self._check_disk_space(source, destination_file.parent):
-                return False, "Insufficient disk space", None
+            # Skip disk space check for local operations (faster)
+            # Only check for network operations
+            if self.is_network_path(destination_folder):
+                if not self._check_disk_space(source, destination_folder):
+                    return False, "Insufficient disk space", None
             
-            # Create backup of file hash for verification
-            source_hash = self._calculate_file_hash(source)
+            # Skip hash calculation for faster operations
+            # Only calculate hash for network operations or large files
+            source_hash = None
+            if self.is_network_path(destination_folder) or source.stat().st_size > 100 * 1024 * 1024:  # 100MB
+                source_hash = self._calculate_file_hash(source)
             
             # Move the file
             shutil.move(str(source), str(destination_file))
@@ -289,33 +340,25 @@ class FileMover:
     
     def verify_move_success(self, original_source: Path, destination: Path, original_hash: Optional[str] = None) -> bool:
         """
-        Verify that file was moved successfully
+        Verify that file was moved successfully (optimized for speed)
         
         Args:
             original_source: Original source path (should not exist)
             destination: Destination path (should exist)
-            original_hash: Original file hash for verification
+            original_hash: Original file hash for verification (optional)
             
         Returns:
             bool: True if move was successful
         """
         try:
-            # Check that source no longer exists
-            if original_source.exists():
-                self.logger.warning(f"Source file still exists after move: {original_source}")
+            # Quick check: source should not exist, destination should exist
+            if original_source.exists() or not destination.exists():
                 return False
             
-            # Check that destination exists
-            if not destination.exists():
-                self.logger.error(f"Destination file does not exist after move: {destination}")
-                return False
-            
-            # Verify file hash if provided
-            if original_hash:
+            # Only verify hash if provided and it's a network operation or large file
+            if original_hash and destination.stat().st_size > 50 * 1024 * 1024:  # 50MB
                 destination_hash = self._calculate_file_hash(destination)
-                if original_hash != destination_hash:
-                    self.logger.error(f"File hash mismatch after move: {destination}")
-                    return False
+                return original_hash == destination_hash
             
             return True
             

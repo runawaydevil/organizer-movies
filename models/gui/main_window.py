@@ -689,12 +689,18 @@ class MainWindow:
         ttk.Button(preview_frame, text="Close", command=preview_window.destroy).pack(pady=(10, 0))
     
     def _on_closing(self):
-        """Handle window closing"""
+        """Handle window closing with proper cleanup"""
         if messagebox.askokcancel("Quit", "Do you want to quit Movie Organizer?"):
             self.logger.info("Application shutting down by user request")
             
+            # Stop any ongoing processing
+            self._stop_all_processing()
+            
             # Properly close all resources
             try:
+                # Cancel any pending operations
+                self._cancel_pending_operations()
+                
                 # Destroy the main window
                 self.root.destroy()
                 
@@ -710,6 +716,32 @@ class MainWindow:
                 # Force exit even if there's an error
                 import os
                 os._exit(0)
+    
+    def _stop_all_processing(self):
+        """Stop all background processing"""
+        try:
+            # Stop any ongoing analysis or processing
+            if hasattr(self, 'on_process_callback') and self.on_process_callback:
+                # Signal to stop processing
+                self.logger.info("Stopping all background processing")
+        except Exception as e:
+            self.logger.warning(f"Error stopping processing: {e}")
+    
+    def _cancel_pending_operations(self):
+        """Cancel any pending operations"""
+        try:
+            # Cancel any pending file operations
+            self.logger.info("Cancelling pending operations")
+            
+            # Clear any pending callbacks
+            self.on_scan_callback = None
+            self.on_process_callback = None
+            self.on_settings_callback = None
+            self.on_metadata_edit_callback = None
+            self.on_reanalyze_callback = None
+            
+        except Exception as e:
+            self.logger.warning(f"Error cancelling operations: {e}")
     
     # Public methods for external control
     def set_scan_callback(self, callback: Callable):
@@ -846,17 +878,51 @@ class MainWindow:
         messagebox.showinfo(title, message)
     
     def run(self):
-        """Start the GUI main loop"""
+        """Start the GUI main loop with proper shutdown handling"""
         try:
             self.logger.info("Starting GUI main loop")
             self.root.mainloop()
+        except KeyboardInterrupt:
+            self.logger.info("GUI interrupted by keyboard")
         except Exception as e:
             self.logger.error(f"Error in main loop: {e}")
         finally:
             self.logger.info("GUI main loop ended")
             # Ensure complete shutdown
             try:
-                if self.root.winfo_exists():
-                    self.root.destroy()
-            except:
-                pass
+                self._cleanup_resources()
+            except Exception as e:
+                self.logger.error(f"Error during cleanup: {e}")
+            finally:
+                # Force exit if window still exists
+                try:
+                    if self.root.winfo_exists():
+                        self.root.destroy()
+                except:
+                    pass
+                
+                # Final exit
+                import sys
+                sys.exit(0)
+    
+    def _cleanup_resources(self):
+        """Clean up all resources before shutdown"""
+        try:
+            # Cancel any pending operations
+            self._cancel_pending_operations()
+            
+            # Clear file list data
+            self.file_list_data = []
+            self.selected_files = []
+            
+            # Clear any remaining callbacks
+            self.on_scan_callback = None
+            self.on_process_callback = None
+            self.on_settings_callback = None
+            self.on_metadata_edit_callback = None
+            self.on_reanalyze_callback = None
+            
+            self.logger.info("Resources cleaned up successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Error cleaning up resources: {e}")

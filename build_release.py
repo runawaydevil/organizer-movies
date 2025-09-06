@@ -40,6 +40,8 @@ Movie Organizer v0.01 - PyInstaller Spec File
 Author: Pablo Murad (runawaydevil)
 """
 
+from pathlib import Path
+
 block_cipher = None
 
 a = Analysis(

@@ -40,6 +40,14 @@ def main():
         import traceback
         traceback.print_exc()
         return 1
+    finally:
+        # Ensure complete shutdown
+        try:
+            import sys
+            sys.exit(0)
+        except:
+            import os
+            os._exit(0)
     
     return 0
 

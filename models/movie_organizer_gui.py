@@ -524,8 +524,10 @@ class MovieOrganizerGUI:
                 results = []
                 
                 for i, filename in enumerate(selected_files):
+                    # Check if processing should stop
                     if not self.is_processing:
                         context.add_warning(filename, "Processing cancelled by user")
+                        self.logger.info("Processing cancelled by user")
                         break
                     
                     # Update progress with context information
@@ -551,7 +553,7 @@ class MovieOrganizerGUI:
                         
                         if not file_data or not file_data.get("metadata"):
                             context.add_failure(filename, "No metadata available", "validation")
-                            results.append(f"❌ {filename}: No metadata available")
+                            results.append(f"[ERROR] {filename}: No metadata available")
                             continue
                         
                         metadata = file_data["metadata"]
@@ -569,26 +571,20 @@ class MovieOrganizerGUI:
                         # Create destination folder in the same directory as the source file
                         # Set the base directory to the source file's parent directory
                         self.folder_creator.base_directory = source_path.parent
-                        self.logger.info(f"Creating folder in: {source_path.parent}")
-                        
+                        # Create destination folder
                         destination_folder = self.folder_creator.create_movie_folder(metadata)
-                        self.logger.info(f"Destination folder created: {destination_folder}")
                         
-                        # Organize file with network-aware handling
-                        self.logger.info(f"Attempting to organize: {filename} -> {destination_folder}")
-                        
-                        success, message, final_path = self.file_mover.organize_movie_file(
+                        # Organize file (reduced logging for speed)
+                        success, message, final_path = self.file_mover.organize_movie_file_fast(
                             source_path, metadata, destination_folder
                         )
-                        
-                        self.logger.info(f"Organization result for {filename}: success={success}, message='{message}'")
                         
                         if success:
                             context.add_success(filename, message, final_path)
                             folder_name = destination_folder.name if destination_folder else "Unknown"
                             file_name = final_path.name if final_path else filename
-                            network_indicator = " 🌐" if is_network else ""
-                            results.append(f"✅ {filename} → {folder_name}/{file_name}{network_indicator}")
+                            network_indicator = " [NETWORK]" if is_network else ""
+                            results.append(f"[SUCCESS] {filename} → {folder_name}/{file_name}{network_indicator}")
                             
                             # Add to organized movies report
                             source_indicator = self._get_analysis_source_indicator()
@@ -610,7 +606,7 @@ class MovieOrganizerGUI:
                             # Use error handler to categorize and handle the error
                             error = Exception(message)
                             should_continue = error_handler.handle_error(error, context, filename)
-                            results.append(f"❌ {filename}: {message}")
+                            results.append(f"[ERROR] {filename}: {message}")
                             
                             if not should_continue:
                                 self.logger.critical("Processing stopped due to critical error")
@@ -619,7 +615,7 @@ class MovieOrganizerGUI:
                     except Exception as e:
                         # Use error handler for unexpected exceptions
                         should_continue = error_handler.handle_error(e, context, filename)
-                        results.append(f"❌ {filename}: {str(e)}")
+                        results.append(f"[ERROR] {filename}: {str(e)}")
                         
                         if not should_continue:
                             self.logger.critical("Processing stopped due to critical error")
@@ -953,19 +949,19 @@ Resposta JSON:"""
         # Summary statistics
         summary_text = f"""Processing Complete!
 
-📊 File Statistics:
-✅ Successfully organized: {report['successful_moves']} files
-❌ Failed: {report['failed_moves']} files
-📈 Success rate: {report['success_rate']:.1f}%
+File Statistics:
+[SUCCESS] Successfully organized: {report['successful_moves']} files
+[ERROR] Failed: {report['failed_moves']} files
+Success rate: {report['success_rate']:.1f}%
 
-⏱️ Performance:
-🕐 Total time: {report['elapsed_time']:.1f} seconds
-🌐 Network operations: {report['network_operations']}
-🔄 Retry operations: {report['retry_operations']}
+Performance:
+Total time: {report['elapsed_time']:.1f} seconds
+Network operations: {report['network_operations']}
+Retry operations: {report['retry_operations']}
 
-⚠️ Issues:
-❌ Errors: {report['error_count']}
-⚠️ Warnings: {report['warning_count']}"""
+Issues:
+Errors: {report['error_count']}
+Warnings: {report['warning_count']}"""
         
         summary_label = ttk.Label(summary_frame, text=summary_text, font=("Consolas", 10), justify=tk.LEFT)
         summary_label.pack(anchor=tk.W)
@@ -1338,7 +1334,7 @@ Need help? Check API_SETUP.md for detailed instructions.
             self.main_window.update_status("Error generating PDF report")
     
     def run(self):
-        """Start the GUI application"""
+        """Start the GUI application with proper shutdown handling"""
         try:
             self.main_window.run()
         except KeyboardInterrupt:
@@ -1347,8 +1343,56 @@ Need help? Check API_SETUP.md for detailed instructions.
             self.logger.error(f"Unexpected error: {e}")
             raise
         finally:
+            # Ensure all processing is stopped
             self.is_processing = False
+            
+            # Stop any background threads
+            self._stop_all_threads()
+            
+            # Clean up resources
+            self._cleanup_application_resources()
+            
             self.logger.info("Application shutting down")
+    
+    def _stop_all_threads(self):
+        """Stop all background threads"""
+        try:
+            self.logger.info("Stopping all background threads")
+            self.is_processing = False
+            
+            # Wait a moment for threads to finish gracefully
+            import time
+            time.sleep(0.5)
+            
+        except Exception as e:
+            self.logger.error(f"Error stopping threads: {e}")
+    
+    def _cleanup_application_resources(self):
+        """Clean up application resources"""
+        try:
+            # Clear file scanner
+            if self.file_scanner:
+                self.file_scanner = None
+            
+            # Clear AI analyzer
+            if self.ai_analyzer:
+                self.ai_analyzer = None
+            
+            # Clear folder creator
+            if self.folder_creator:
+                self.folder_creator = None
+            
+            # Clear file mover
+            if self.file_mover:
+                self.file_mover = None
+            
+            # Clear current files
+            self.current_files = []
+            
+            self.logger.info("Application resources cleaned up")
+            
+        except Exception as e:
+            self.logger.error(f"Error cleaning up application resources: {e}")
 
 
 def main():

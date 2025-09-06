@@ -32,7 +32,7 @@ class FolderCreator:
     
     def create_movie_folder(self, metadata: MovieMetadata) -> Path:
         """
-        Create folder for movie based on metadata
+        Create folder for movie based on metadata (optimized for speed)
         
         Args:
             metadata: Movie metadata
@@ -43,12 +43,12 @@ class FolderCreator:
         folder_name = self.sanitize_folder_name(metadata.get_folder_name())
         folder_path = self.base_directory / folder_name
         
-        # Handle duplicates
+        # Handle duplicates (optimized)
         folder_path = self.handle_duplicate_folders(folder_path)
         
         try:
+            # Create folder directly (mkdir handles exist_ok efficiently)
             folder_path.mkdir(parents=True, exist_ok=True)
-            self.logger.info(f"Created folder: {folder_path}")
             return folder_path
             
         except Exception as e:
@@ -93,7 +93,7 @@ class FolderCreator:
     
     def handle_duplicate_folders(self, folder_path: Path) -> Path:
         """
-        Handle duplicate folder names by adding numbers
+        Handle duplicate folder names by adding numbers (optimized)
         
         Args:
             folder_path: Original folder path
@@ -108,23 +108,21 @@ class FolderCreator:
         parent = folder_path.parent
         counter = 1
         
-        while True:
+        # Optimized duplicate handling
+        while counter <= 10:  # Limit to 10 attempts for speed
             new_name = f"{base_name} ({counter})"
             new_path = parent / new_name
             
             if not new_path.exists():
-                self.logger.info(f"Resolved duplicate: {folder_path} -> {new_path}")
                 return new_path
             
             counter += 1
-            
-            # Safety check to avoid infinite loop
-            if counter > 100:
-                self.logger.warning(f"Too many duplicates for {base_name}, using timestamp")
-                import time
-                timestamp = int(time.time())
-                new_name = f"{base_name} ({timestamp})"
-                return parent / new_name
+        
+        # If still duplicates, use timestamp
+        import time
+        timestamp = int(time.time())
+        new_name = f"{base_name} ({timestamp})"
+        return parent / new_name
     
     def folder_exists(self, metadata: MovieMetadata) -> bool:
         """
