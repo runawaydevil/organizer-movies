@@ -1,0 +1,24 @@
+# Movie Organizer v0.1 - Dependencies
+# Author: Pablo Murad (runawaydevil)
+# Repository: https://github.com/runawaydevil/organizer-movies.git
+
+# Core AI and API dependencies
+openai>=1.0.0              # Required: OpenAI GPT API for movie identification
+requests>=2.31.0           # Required: HTTP requests for TMDB API
+httpx>=0.24.0              # Optional: Better HTTP handling
+
+# PDF report generation
+reportlab>=4.0.0           # Required: PDF report generation
+pillow>=9.0.0              # Required: Image handling for reports
+
+# Security for API key storage
+cryptography>=3.4.0       # Required: Encrypted API key storage
+
+# GUI framework (usually included with Python)
+# tkinter                  # Included with Python - uncomment if missing
+
+# Development dependencies (optional - uncomment for development)
+# pytest>=7.0.0           # Testing framework
+# pytest-cov>=4.0.0       # Coverage reporting
+# black>=22.0.0           # Code formatting
+# flake8>=5.0.0           # Code linting

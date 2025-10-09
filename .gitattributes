@@ -1,0 +1,48 @@
+# Movie Organizer - Git Attributes
+# Author: Pablo Murad (runawaydevil)
+# Repository: https://github.com/runawaydevil/organizer-movies.git
+
+# ===========================================
+# Text Files
+# ===========================================
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.bat text eol=crlf
+*.spec text eol=lf
+
+# ===========================================
+# Binary Files
+# ===========================================
+*.exe binary
+*.ico binary
+*.jpg binary
+*.png binary
+*.gif binary
+*.pdf binary
+
+# ===========================================
+# Documentation
+# ===========================================
+README.md linguist-documentation
+API_SETUP.md linguist-documentation
+CLI_USAGE.md linguist-documentation
+CONTRIBUTING.md linguist-documentation
+CHANGELOG.md linguist-documentation
+LICENSE linguist-documentation
+
+# ===========================================
+# Generated Files (should be ignored)
+# ===========================================
+*.pyc linguist-generated
+*.pyo linguist-generated
+__pycache__/ linguist-vendored
+build/ linguist-vendored
+dist/ linguist-vendored
+release/ linguist-vendored
+
+# ===========================================
+# Configuration Examples
+# ===========================================
+*.example.json linguist-documentation

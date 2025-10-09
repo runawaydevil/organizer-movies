@@ -1,0 +1,9 @@
+{
+  "api_key": "YOUR_TMDB_API_KEY_HERE",
+  "bearer_token": "YOUR_TMDB_BEARER_TOKEN_HERE",
+  "enabled": false,
+  "cache_duration_days": 7,
+  "use_original_titles": true,
+  "language": "en-US",
+  "rate_limit_delay": 0.25
+}
