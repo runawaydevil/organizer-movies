@@ -76,6 +76,3 @@ Dev deps: `pip install -e ".[dev]"` or use `requirements-dev.txt`.
 - API keys encrypted (AES-256) in local storage.
 - No telemetry. Only movie-related data sent to configured APIs.
 
-## License
-
-MIT. Credit: Pablo Murad (runawaydevil). See [LICENSE](LICENSE).
