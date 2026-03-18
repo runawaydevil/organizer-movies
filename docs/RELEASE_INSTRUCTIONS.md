@@ -1,189 +1,35 @@
-# 🚀 Release Instructions - Movie Organizer v0.1
+# Release Instructions
 
-**Author: Pablo Murad (runawaydevil)**  
-**Repository: https://github.com/runawaydevil/organizer-movies.git**
+Build and release steps. Author: Pablo Murad (runawaydevil). 2025-2026.
 
-## 📦 Building the Windows Release
+## Build (Windows)
 
-### Prerequisites
-- Windows 10/11
-- Python 3.8+ installed
-- Internet connection (for downloading dependencies)
+From project root:
 
-### Build Steps
-
-1. **Quick Build (Recommended)**:
-   ```cmd
-   python scripts/build_release.py
-   ```
-
-2. **Manual Build**:
-   ```cmd
-   cd scripts
-   python build_release.py
-   ```
-
-### What Gets Created
-
-The build process creates a `release` folder containing:
-
-```
-release/
-├── MovieOrganizer.exe              # Main application
-├── Install_MovieOrganizer.bat      # System installer (requires admin)
-├── Run_MovieOrganizer_Portable.bat # Portable launcher
-├── README.md                       # Full documentation
-├── docs/                          # Complete documentation
-│   ├── API_SETUP.md              # API setup guide
-│   ├── CLI_USAGE.md              # CLI usage guide
-│   ├── TROUBLESHOOTING.md        # Common issues
-│   ├── DEVELOPER_SETUP.md        # Developer info
-│   └── CONTRIBUTING.md           # Contribution guidelines
-├── LICENSE                         # MIT License
-├── README_RELEASE.txt              # Release-specific instructions
-└── Images/                         # Screenshots and icons
-    └── 1.jpg
-```
-
-## 📋 Distribution Options
-
-### Option 1: System Installation (Recommended)
-- User runs `Install_MovieOrganizer.bat` as administrator
-- Installs to `C:\Program Files\MovieOrganizer\`
-- Creates desktop shortcut and start menu entry
-- PDF reports saved in movie folders
-- Includes uninstaller
-
-### Option 2: Portable Mode
-- User runs `Run_MovieOrganizer_Portable.bat`
-- No installation required
-- Runs from current folder
-- PDF reports saved in program folder
-- Perfect for USB drives or temporary use
-
-## 🔧 Technical Details
-
-### Executable Features
-- **Self-contained**: All dependencies included
-- **No Python required**: Runs on any Windows system
-- **Secure config**: API keys stored in user profile
-- **Working directory**: Reports saved appropriately based on mode
-
-### File Locations
-
-**Installed Mode**:
-- Program: `C:\Program Files\MovieOrganizer\`
-- Config: `%LOCALAPPDATA%\MovieOrganizer\`
-- Reports: Same folder as movies being organized
-
-**Portable Mode**:
-- Program: Current folder
-- Config: `%LOCALAPPDATA%\MovieOrganizer\`
-- Reports: Program folder
-
-### Security
-- API keys encrypted and stored locally
-- No network access except to OpenAI/TMDB APIs
-- No telemetry or data collection
-- Configuration never goes to GitHub
-
-## 🎯 User Experience
-
-### First Run
-1. User runs the program
-2. Settings window appears (if no config found)
-3. User enters OpenAI API key (required)
-4. User optionally enters TMDB keys
-5. Configuration saved securely
-6. Ready to organize movies!
-
-### Subsequent Runs
-1. Program loads saved configuration
-2. User selects movie folder
-3. AI analyzes movies automatically
-4. User reviews and organizes
-5. PDF report generated automatically
-
-## 📊 Build Process Details
-
-The `scripts/build_release.py` script:
-
-1. **Installs dependencies** (PyInstaller, etc.)
-2. **Creates icon** from PIL if available
-3. **Generates version info** for Windows executable
-4. **Creates PyInstaller spec** with all required files
-5. **Builds executable** with PyInstaller
-6. **Creates installer script** with admin privileges
-7. **Creates portable launcher** for current directory
-8. **Packages everything** in release folder
-
-## 🐛 Troubleshooting Build Issues
-
-### Common Problems
-
-**"PyInstaller not found"**
-```cmd
-pip install pyinstaller
-```
-
-**"Missing dependencies"**
-```cmd
-pip install -r requirements.txt
-```
-
-**"Build fails with import errors"**
-- Check that all imports work: `python main.py`
-- Verify all files exist in project directory
-
-**"Executable won't run"**
-- Test on clean Windows system
-- Check Windows Defender/antivirus
-- Verify all DLLs included
-
-### Debug Build
 ```cmd
 cd scripts
-python -m PyInstaller --debug=all MovieOrganizer.spec
+python build_release.py
 ```
 
-## 📈 Release Checklist
+Output goes to a `release/` folder (or as configured in the script): executable, launchers, README, docs, LICENSE.
 
-Before distributing:
+## Prerequisites
 
-- [ ] Test executable on clean Windows system
-- [ ] Verify installer works with admin privileges
-- [ ] Test portable mode in different folders
-- [ ] Confirm API key storage works
-- [ ] Test PDF report generation
-- [ ] Verify all documentation included
-- [ ] Check file sizes are reasonable
-- [ ] Test uninstaller works correctly
+- Python 3.8+
+- Dependencies: `pip install -r requirements.txt`
+- PyInstaller (usually installed by the build script)
 
-## 🌐 Distribution
+## Distribution
 
-### GitHub Release
-1. Create release tag: `v0.1.0`
-2. Upload `release` folder as ZIP
-3. Include release notes
-4. Mark as stable release
+- **Installed**: run the installer batch as admin; program and config paths are set by the installer.
+- **Portable**: run the portable batch from the release folder; no install, config in user profile or local.
 
-### Direct Distribution
-1. ZIP the entire `release` folder
-2. Share with users
-3. Include `README_RELEASE.txt` instructions
+## Version and tag
 
-## 📞 Support
+- Set version in `core/version.py` (VERSION, COPYRIGHT).
+- Create a Git tag: `python scripts/create_git_tag.py` (if available).
 
-If users have issues:
+## Platforms
 
-1. **Check requirements**: Windows 10+, no Python needed
-2. **Antivirus**: May flag executable, add exception
-3. **Permissions**: Installer needs admin rights
-4. **API keys**: Must be configured for program to work
-5. **Logs**: Check `movie_organizer.log` for errors
-
----
-
-**Movie Organizer v0.1**  
-**Made with ❤️ by Pablo Murad (runawaydevil)**  
-*Ready for Windows distribution! 🎬*
+- Windows: primary target for the scripted build.
+- Linux/macOS: run from source (`python main.py`, `python cli.py`).

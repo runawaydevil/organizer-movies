@@ -28,11 +28,11 @@ from pathlib import Path
 parent_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from version import get_version_string, APP_TITLE, VERSION, AUTHOR
+from core.version import get_version_string, APP_TITLE, VERSION, AUTHOR
 
 from services.file_scanner import FileScanner
 # FastNetworkScanner will be imported when needed
-from services.ai_analyzer import AIAnalyzer
+from services.llm.factory import create_llm_analyzer
 from services.folder_creator import FolderCreator
 from services.file_mover import FileMover
 from services.tmdb_config_manager import TMDBConfigManager
@@ -61,9 +61,14 @@ class MovieOrganizerGUI:
         
         # Application state - load from secure storage
         self.config = self.secure_config.load_config()
+        if self.config.pop("_decryption_may_have_failed", False):
+            messagebox.showwarning(
+                "Settings could not be read",
+                "Saved API keys could not be read. Please re-enter them in Settings (File → Settings)."
+            )
         self.current_files = []
         self.file_scanner = None
-        self.ai_analyzer = None  # Will be either AIAnalyzer or HybridAnalyzer based on TMDB config
+        self.ai_analyzer = None  # LLM analyzer or HybridAnalyzer (LLM + TMDB)
         self.folder_creator = None
         self.file_mover = FileMover()
         self.processing_thread = None
@@ -308,20 +313,26 @@ class MovieOrganizerGUI:
     
     def _start_analysis_thread(self):
         """Start background thread for AI analysis"""
-        if not self.config.get("openai_api_key"):
+        provider = self.config.get("llm_provider") or "openai"
+        if provider == "openai" and not self.config.get("openai_api_key"):
             self.main_window.show_error(
                 "No API Key",
-                "Please configure your OpenAI API key in Settings before analyzing files."
+                "Please configure your OpenAI API key in Settings (or use Ollama)."
             )
             return
-        
+
         def analyze_files():
             try:
-                # Initialize AI analyzer
-                self.ai_analyzer = AIAnalyzer(
-                    api_key=self.config["openai_api_key"],
-                    model=self.config["openai_model"]
-                )
+                self.ai_analyzer = create_llm_analyzer(self.config)
+                tmdb_config = self.tmdb_config_manager.load_tmdb_config()
+                if tmdb_config and tmdb_config.is_configured():
+                    from services.hybrid_analyzer import HybridAnalyzer
+                    self.ai_analyzer = HybridAnalyzer(
+                        llm_analyzer=self.ai_analyzer,
+                        tmdb_api_key=tmdb_config.api_key,
+                        tmdb_bearer_token=tmdb_config.bearer_token,
+                        cache_duration_days=getattr(tmdb_config, "cache_duration_days", 7),
+                    )
                 
                 total_files = len(self.current_files)
                 
@@ -490,7 +501,7 @@ class MovieOrganizerGUI:
             import sys
             import os
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-            from processing_context import ProcessingContext, ErrorHandler
+            from core.processing_context import ProcessingContext, ErrorHandler
             
             # Initialize processing context and error handler
             context = ProcessingContext(total_files=len(selected_files))
@@ -670,10 +681,16 @@ class MovieOrganizerGUI:
         self.logger.info("Settings updated")
         
         # Save configuration securely (API keys will be encoded)
-        if self.secure_config.save_config(self.config):
+        main_config_saved = self.secure_config.save_config(self.config)
+        if main_config_saved:
             self.logger.info("Configuration saved securely to local storage")
         else:
             self.logger.error("Failed to save configuration securely")
+            messagebox.showerror(
+                "Save failed",
+                "Failed to save settings. Check that the config directory is writable."
+            )
+            self.main_window.update_status("Failed to save settings – check config directory")
         
         # Handle TMDB configuration changes
         if "tmdb_config" in new_settings:
@@ -687,16 +704,17 @@ class MovieOrganizerGUI:
                 self.ai_analyzer = None  # Reset current analyzer
                 self._load_tmdb_config()  # Reload with new config
                 
-                if tmdb_config.is_configured():
-                    self.main_window.update_status("✅ Settings saved securely - TMDB integration enabled")
-                    self.main_window.update_analyzer_status("Hybrid (AI + TMDB)", tmdb_enabled=True)
-                else:
-                    self.main_window.update_status("✅ Settings saved securely - Using AI-only analysis")
-                    self.main_window.update_analyzer_status("AI Only", tmdb_enabled=False)
+                if main_config_saved:
+                    if tmdb_config.is_configured():
+                        self.main_window.update_status("✅ Settings saved securely - TMDB integration enabled")
+                        self.main_window.update_analyzer_status("Hybrid (AI + TMDB)", tmdb_enabled=True)
+                    else:
+                        self.main_window.update_status("✅ Settings saved securely - Using AI-only analysis")
+                        self.main_window.update_analyzer_status("AI Only", tmdb_enabled=False)
             else:
                 self.logger.error("Failed to save TMDB configuration")
                 self.main_window.update_status("⚠️ Settings saved but TMDB configuration failed")
-        else:
+        elif main_config_saved:
             self.main_window.update_status("✅ Settings saved securely")
         
         # Update logging level if changed
@@ -814,21 +832,12 @@ Exemplos:
 
 Resposta JSON:"""
                 
-                # Make API call with enhanced context
-                response = self.ai_analyzer.client.chat.completions.create(
-                    model=self.config["openai_model"],
-                    messages=[
-                        {"role": "system", "content": "You are a movie filename analyzer. Return only valid JSON."},
-                        {"role": "user", "content": enhanced_prompt}
-                    ],
-                    max_tokens=150,
-                    temperature=0.1
-                )
-                
-                if response.choices and response.choices[0].message.content:
-                    # Parse the enhanced response
-                    api_response = {"content": response.choices[0].message.content.strip()}
-                    enhanced_metadata = self.ai_analyzer._parse_ai_response(api_response, filename)
+                # Use LLM complete_chat (works for OpenAI and Ollama)
+                llm = getattr(self.ai_analyzer, "ai_analyzer", self.ai_analyzer)
+                system = "You are a movie filename analyzer. Return only valid JSON."
+                content = llm.complete_chat(system, enhanced_prompt)
+                if content:
+                    enhanced_metadata = llm._parse_ai_response(content, filename)
                     
                     # Merge with manual data (prioritize manual input)
                     final_metadata = MovieMetadata(
@@ -1060,73 +1069,42 @@ Warnings: {report['warning_count']}"""
         return f"{s} {size_names[i]}"
     
     def _load_tmdb_config(self):
-        """Load TMDB configuration and initialize analyzer"""
-        tmdb_config = self.tmdb_config_manager.load_tmdb_config()
-        
-        # Always try to use hybrid analyzer if TMDB is configured
-        if tmdb_config and tmdb_config.is_configured():
-            try:
-                # Import here to avoid circular imports
+        """Load TMDB configuration and initialize analyzer (LLM or LLM+TMDB)."""
+        provider = self.config.get("llm_provider") or "openai"
+        if provider == "openai" and not self.config.get("openai_api_key"):
+            self.main_window.update_status("OpenAI API key or Ollama required - configure in Settings")
+            return
+        try:
+            self.ai_analyzer = create_llm_analyzer(self.config)
+            tmdb_config = self.tmdb_config_manager.load_tmdb_config()
+            if tmdb_config and tmdb_config.is_configured():
                 from services.hybrid_analyzer import HybridAnalyzer
-                
                 self.ai_analyzer = HybridAnalyzer(
-                    openai_api_key=self.config["openai_api_key"],
+                    llm_analyzer=self.ai_analyzer,
                     tmdb_api_key=tmdb_config.api_key,
                     tmdb_bearer_token=tmdb_config.bearer_token,
-                    openai_model=self.config.get("openai_model", "gpt-3.5-turbo")
+                    cache_duration_days=getattr(tmdb_config, "cache_duration_days", 7),
                 )
-                
-                self.logger.info("Hybrid analyzer (AI + TMDB) initialized - will use best results from both sources")
-                
-                # Update GUI status
-                self.main_window.update_analyzer_status("Hybrid (AI + TMDB)", tmdb_enabled=True)
-                
-            except Exception as e:
-                self.logger.error(f"Failed to initialize hybrid analyzer, falling back to AI-only: {e}")
-                self._initialize_ai_only_analyzer()
-        else:
-            self.logger.info("TMDB not configured, using AI-only analysis")
-            self._initialize_ai_only_analyzer()
-            
-            # Update GUI status
-            self.main_window.update_analyzer_status("AI Only", tmdb_enabled=False)
+                self.main_window.update_analyzer_status("Hybrid (LLM + TMDB)", tmdb_enabled=True)
+            else:
+                model = self.config.get("llm_model") or self.config.get("openai_model") or "gpt-4o-mini"
+                self.main_window.update_analyzer_status(f"{provider} ({model})", tmdb_enabled=False)
+        except Exception as e:
+            self.logger.error(f"Failed to initialize analyzer: {e}")
+            self.main_window.update_status(f"Analyzer failed: {str(e)}")
     
     def _initialize_ai_only_analyzer(self):
-        """Initialize AI-only analyzer as fallback"""
-        try:
-            # Check if OpenAI API key is configured
-            if not self.config.get("openai_api_key"):
-                self.logger.error("OpenAI API key not configured")
-                self.main_window.update_status("❌ OpenAI API key required - Please configure in Settings")
-                return False
-            
-            from services.ai_analyzer import AIAnalyzer
-            
-            self.ai_analyzer = AIAnalyzer(
-                api_key=self.config["openai_api_key"],
-                model=self.config.get("openai_model", "gpt-3.5-turbo")
-            )
-            
-            # Update GUI status
-            self.main_window.update_analyzer_status("AI Only", tmdb_enabled=False)
-            self.main_window.update_status("✅ AI analyzer ready - TMDB optional for better accuracy")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Failed to initialize AI analyzer: {e}")
-            self.main_window.update_status(f"❌ AI analyzer failed: {str(e)}")
-            return False
+        """Initialize LLM-only analyzer (no TMDB)."""
+        return self._load_tmdb_config() is None or self.ai_analyzer is not None
     
     def _get_analyzer(self):
-        """Get the current analyzer (always returns the best available analyzer)"""
+        """Get the current analyzer (LLM or Hybrid)."""
         if not self.ai_analyzer:
-            # Check if OpenAI API key is configured
-            if not self.config.get("openai_api_key"):
+            provider = self.config.get("llm_provider") or "openai"
+            if provider == "openai" and not self.config.get("openai_api_key"):
                 self._show_api_configuration_error()
                 return None
-            
             self._load_tmdb_config()
-        
         return self.ai_analyzer
     
     def _show_api_configuration_error(self):

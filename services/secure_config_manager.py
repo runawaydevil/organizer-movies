@@ -61,42 +61,43 @@ class SecureConfigManager:
         self.logger.info(f"Encryption enabled: {self.use_encryption}")
     
     def _get_encryption_key(self) -> bytes:
-        """Get or create encryption key"""
+        """Get or create encryption key. Uses stored Fernet key (44 bytes) when present for stable key across runs; falls back to derived key (16-byte salt) for backward compatibility."""
         if not self.use_encryption:
             return b"fallback_key"
         
         try:
             if self.key_file.exists():
-                # Load existing key
                 with open(self.key_file, 'rb') as f:
-                    salt = f.read(16)
-                    if len(salt) != 16:
-                        raise ValueError("Invalid salt length")
-            else:
-                # Generate new salt
-                salt = secrets.token_bytes(16)
-                with open(self.key_file, 'wb') as f:
-                    f.write(salt)
-                # Set file permissions (readable only by user)
-                try:
-                    os.chmod(self.key_file, 0o600)
-                except Exception as e:
-                    self.logger.warning(f"Could not set key file permissions: {e}")
-            
-            # Derive key from machine-specific information + salt
-            machine_info = f"{os.name}-{Path.home()}-MovieOrganizer".encode()
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=salt,
-                iterations=100000,
-            )
-            key = base64.urlsafe_b64encode(kdf.derive(machine_info))
+                    data = f.read()
+                # Stored Fernet key (44 bytes) – stable across runs, no Path.home() dependence
+                if len(data) == 44:
+                    try:
+                        Fernet(data)  # validate
+                        return data
+                    except Exception:
+                        pass
+                # Legacy: 16-byte salt, derive key for backward compatibility
+                if len(data) == 16:
+                    machine_info = f"{os.name}-{Path.home()}-MovieOrganizer".encode()
+                    kdf = PBKDF2HMAC(
+                        algorithm=hashes.SHA256(),
+                        length=32,
+                        salt=data,
+                        iterations=100000,
+                    )
+                    return base64.urlsafe_b64encode(kdf.derive(machine_info))
+                raise ValueError(f"Unexpected key file length: {len(data)}")
+            # No key file: generate and store Fernet key for stable key across runs
+            key = Fernet.generate_key()
+            with open(self.key_file, 'wb') as f:
+                f.write(key)
+            try:
+                os.chmod(self.key_file, 0o600)
+            except Exception as e:
+                self.logger.warning(f"Could not set key file permissions: {e}")
             return key
-            
         except Exception as e:
             self.logger.error(f"Error with encryption key: {e}")
-            # Fallback to a deterministic key
             return base64.urlsafe_b64encode(b"fallback_key_movie_organizer_v01"[:32].ljust(32, b'0'))
     
     def _encrypt_data(self, data: str) -> str:
@@ -140,7 +141,13 @@ class SecureConfigManager:
             except Exception:
                 self.logger.error(f"Decryption failed: {e}")
                 return ""
-    
+
+    def _encode_key(self, data: str) -> str:
+        return self._encrypt_data(data)
+
+    def _decode_key(self, data: str) -> str:
+        return self._decrypt_data(data)
+
     def save_config(self, config: Dict[str, Any]) -> bool:
         """
         Save configuration with API keys encoded
@@ -199,12 +206,11 @@ class SecureConfigManager:
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
             
-            # Check if config is encoded
-            if config.get("_metadata", {}).get("encoded", False):
+            was_encoded = config.get("_metadata", {}).get("encoded", False)
+            if was_encoded:
                 # Decode sensitive data
                 if "openai_api_key" in config:
                     config["openai_api_key"] = self._decode_key(config["openai_api_key"])
-                
                 if "tmdb_config" in config and isinstance(config["tmdb_config"], dict):
                     tmdb_config = config["tmdb_config"]
                     if "api_key" in tmdb_config:
@@ -215,9 +221,23 @@ class SecureConfigManager:
             # Remove metadata before returning
             config.pop("_metadata", None)
             
+            # Detect possible decryption failure (e.g. key changed on macOS)
+            decryption_may_have_failed = False
+            if was_encoded:
+                openai_empty = not (config.get("openai_api_key") or "").strip()
+                tmdb_empty = True
+                if config.get("tmdb_config") and isinstance(config["tmdb_config"], dict):
+                    tc = config["tmdb_config"]
+                    tmdb_empty = not (tc.get("api_key") or "").strip() and not (tc.get("bearer_token") or "").strip()
+                if openai_empty and tmdb_empty:
+                    self.logger.warning("Saved API keys could not be read (decryption may have failed). Please re-enter them in Settings.")
+                    decryption_may_have_failed = True
+            
             # Merge with defaults to ensure all keys exist
             default_config = self._get_default_config()
             default_config.update(config)
+            if decryption_may_have_failed:
+                default_config["_decryption_may_have_failed"] = True
             
             self.logger.info("Configuration loaded successfully")
             return default_config
@@ -232,6 +252,9 @@ class SecureConfigManager:
             # API settings
             "openai_api_key": "",
             "openai_model": "gpt-3.5-turbo",
+            "llm_provider": "openai",
+            "llm_model": "gpt-4o-mini",
+            "ollama_base_url": "http://localhost:11434",
             "rate_limit_delay": 1.0,
             "max_retries": 3,
             

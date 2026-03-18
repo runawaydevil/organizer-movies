@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from version import VERSION, get_version_string
+from core.version import VERSION, get_version_string
 
 def create_git_tag():
     """Create annotated Git tag for release"""

@@ -1,4 +1,8 @@
 @echo off
+REM Run from project root: scripts\build_simple.bat
+REM Changes to repo root then runs PyInstaller
+
+cd /d "%~dp0.."
 echo Building Movie Organizer v0.1...
 echo Author: Pablo Murad (runawaydevil)
 echo.
@@ -8,7 +12,7 @@ python -m PyInstaller ^
 --windowed ^
 --name=MovieOrganizer ^
 --add-data="Images;Images" ^
---add-data="version.py;." ^
+--add-data="core;core" ^
 --hidden-import=tkinter ^
 --hidden-import=tkinter.ttk ^
 --hidden-import=tkinter.messagebox ^

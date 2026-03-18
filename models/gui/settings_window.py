@@ -90,32 +90,57 @@ class SettingsWindow:
         main_frame = ttk.Frame(self.scrollable_frame, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # API Key section
-        api_frame = ttk.LabelFrame(main_frame, text="OpenAI API Configuration", padding="10")
-        api_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        ttk.Label(api_frame, text="API Key:").pack(anchor=tk.W)
-        
+        # LLM section
+        llm_frame = ttk.LabelFrame(main_frame, text="LLM (AI) Configuration", padding="10")
+        llm_frame.pack(fill=tk.X, pady=(0, 20))
+
+        ttk.Label(llm_frame, text="Provider:").pack(anchor=tk.W)
+        self.llm_provider_var = tk.StringVar(value="openai")
+        provider_combo = ttk.Combobox(
+            llm_frame,
+            textvariable=self.llm_provider_var,
+            values=["openai", "ollama"],
+            state="readonly",
+            width=15
+        )
+        provider_combo.pack(anchor=tk.W, pady=(5, 10))
+        provider_combo.bind("<<ComboboxSelected>>", lambda e: self._toggle_llm_fields())
+
+        ttk.Label(llm_frame, text="OpenAI API Key (required for OpenAI):").pack(anchor=tk.W)
         self.api_key_var = tk.StringVar()
-        api_key_entry = ttk.Entry(
-            api_frame,
+        self.api_key_entry = ttk.Entry(
+            llm_frame,
             textvariable=self.api_key_var,
             show="*",
             width=60
         )
-        api_key_entry.pack(fill=tk.X, pady=(5, 10))
-        
-        ttk.Label(api_frame, text="Model:").pack(anchor=tk.W)
-        
+        self.api_key_entry.pack(fill=tk.X, pady=(5, 5))
+
+        ttk.Label(llm_frame, text="OpenAI Model:").pack(anchor=tk.W)
         self.model_var = tk.StringVar()
-        model_combo = ttk.Combobox(
-            api_frame,
+        self.model_combo = ttk.Combobox(
+            llm_frame,
             textvariable=self.model_var,
-            values=["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"],
+            values=["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"],
             state="readonly",
             width=20
         )
-        model_combo.pack(anchor=tk.W, pady=(5, 0))
+        self.model_combo.pack(anchor=tk.W, pady=(5, 10))
+
+        ttk.Label(llm_frame, text="Ollama Base URL:").pack(anchor=tk.W)
+        self.ollama_url_var = tk.StringVar(value="http://localhost:11434")
+        self.ollama_url_entry = ttk.Entry(llm_frame, textvariable=self.ollama_url_var, width=50)
+        self.ollama_url_entry.pack(fill=tk.X, pady=(5, 5))
+
+        ttk.Label(llm_frame, text="Ollama Model:").pack(anchor=tk.W)
+        self.ollama_model_var = tk.StringVar(value="llama3.2")
+        ollama_model_combo = ttk.Combobox(
+            llm_frame,
+            textvariable=self.ollama_model_var,
+            values=["llama3.2", "llama3.1", "mistral", "gemma2", "phi3"],
+            width=20
+        )
+        ollama_model_combo.pack(anchor=tk.W, pady=(5, 0))
         
         # Rate limiting section
         rate_frame = ttk.LabelFrame(main_frame, text="Rate Limiting", padding="10")
@@ -342,11 +367,31 @@ class SettingsWindow:
             command=self._cancel
         ).pack(side=tk.RIGHT)
     
+    def _toggle_llm_fields(self):
+        """Enable/disable OpenAI vs Ollama fields based on provider."""
+        is_openai = self.llm_provider_var.get() == "openai"
+        state_openai = tk.NORMAL if is_openai else tk.DISABLED
+        state_ollama = tk.NORMAL if not is_openai else tk.DISABLED
+        self.api_key_entry.config(state=state_openai)
+        self.model_combo.config(state=state_openai)
+        self.ollama_url_entry.config(state=state_ollama)
+        self.ollama_model_var.set(self.ollama_model_var.get())
+
     def _load_current_settings(self):
         """Load current settings into the form"""
-        # API settings
+        # LLM settings
+        self.llm_provider_var.set(self.current_settings.get("llm_provider", "openai"))
         self.api_key_var.set(self.current_settings.get("openai_api_key", ""))
-        self.model_var.set(self.current_settings.get("openai_model", "gpt-3.5-turbo"))
+        self.model_var.set(
+            self.current_settings.get("llm_model")
+            or self.current_settings.get("openai_model", "gpt-4o-mini")
+        )
+        self.ollama_url_var.set(self.current_settings.get("ollama_base_url", "http://localhost:11434"))
+        if self.current_settings.get("llm_provider") == "ollama":
+            self.ollama_model_var.set(
+                self.current_settings.get("llm_model", "llama3.2")
+            )
+        self._toggle_llm_fields()
         self.rate_delay_var.set(self.current_settings.get("rate_limit_delay", 1.0))
         
         # Network settings
@@ -376,9 +421,9 @@ class SettingsWindow:
     
     def _save_settings(self):
         """Save settings and close window"""
-        # Validate settings
-        if not self.api_key_var.get().strip():
-            messagebox.showwarning("Invalid Settings", "Please enter an OpenAI API key.")
+        provider = self.llm_provider_var.get()
+        if provider == "openai" and not self.api_key_var.get().strip():
+            messagebox.showwarning("Invalid Settings", "Please enter an OpenAI API key or select Ollama.")
             return
         
         # Validate network settings
@@ -404,11 +449,15 @@ class SettingsWindow:
                 messagebox.showwarning("Invalid Settings", "Please enter TMDB bearer token or disable TMDB integration.")
                 return
         
+        model = self.model_var.get() if provider == "openai" else self.ollama_model_var.get()
         # Collect all settings
         settings = {
-            # API settings
+            # LLM settings
+            "llm_provider": provider,
+            "llm_model": model,
             "openai_api_key": self.api_key_var.get().strip(),
-            "openai_model": self.model_var.get(),
+            "openai_model": model if provider == "openai" else self.current_settings.get("openai_model", "gpt-4o-mini"),
+            "ollama_base_url": self.ollama_url_var.get().strip() or "http://localhost:11434",
             "rate_limit_delay": self.rate_delay_var.get(),
             
             # Network settings

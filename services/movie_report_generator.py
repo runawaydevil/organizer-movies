@@ -17,7 +17,7 @@ import json
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.absolute()))
-from version import get_version_string, VERSION, AUTHOR, COPYRIGHT
+from core.version import get_version_string, VERSION, AUTHOR, COPYRIGHT
 
 
 @dataclass

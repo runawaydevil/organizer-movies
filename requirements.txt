@@ -3,8 +3,8 @@
 # Repository: https://github.com/runawaydevil/organizer-movies.git
 
 # Core AI and API dependencies
-openai>=1.0.0              # Required: OpenAI GPT API for movie identification
-requests>=2.31.0           # Required: HTTP requests for TMDB API
+openai>=1.0.0              # OpenAI API (when llm_provider=openai)
+requests>=2.31.0           # HTTP (TMDB, Ollama API when llm_provider=ollama)
 httpx>=0.24.0              # Optional: Better HTTP handling
 
 # PDF report generation
@@ -17,8 +17,8 @@ cryptography>=3.4.0       # Required: Encrypted API key storage
 # GUI framework (usually included with Python)
 # tkinter                  # Included with Python - uncomment if missing
 
-# Development dependencies (optional - uncomment for development)
-# pytest>=7.0.0           # Testing framework
-# pytest-cov>=4.0.0       # Coverage reporting
-# black>=22.0.0           # Code formatting
-# flake8>=5.0.0           # Code linting
+# Development (optional): pip install -r requirements-dev.txt
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+# black>=23.0.0
+# flake8>=6.0.0

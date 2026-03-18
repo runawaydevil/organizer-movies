@@ -8,11 +8,21 @@ Version: 0.1
 Repository: https://github.com/runawaydevil/organizer-movies.git
 """
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Literal
+
 try:
     from .movie_metadata import MovieMetadata
 except ImportError:
     from movie_metadata import MovieMetadata
+
+
+@dataclass
+class LLMConfig:
+    """LLM provider configuration (OpenAI or Ollama)."""
+    provider: Literal["openai", "ollama"] = "openai"
+    model: str = "gpt-4o-mini"
+    openai_api_key: str = ""
+    ollama_base_url: str = "http://localhost:11434"
 
 
 @dataclass

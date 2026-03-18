@@ -11,12 +11,12 @@ long_description = (this_directory / "README.md").read_text(encoding='utf-8')
 setup(
     name="movie-organizer",
     version="0.1.0",
-    author="Movie Organizer Team",
-    author_email="your-email@example.com",
+    author="runawaydevil",
+    author_email="runawaydevil@pm.me",
     description="AI-Powered Movie File Organizer with TMDB Integration",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/movie-organizer",
+    url="https://github.com/runawaydevil/organizer-movies",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -58,8 +58,8 @@ setup(
     },
     keywords="movie organizer ai tmdb plex jellyfin media server",
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/movie-organizer/issues",
-        "Source": "https://github.com/yourusername/movie-organizer",
-        "Documentation": "https://github.com/yourusername/movie-organizer#readme",
+        "Bug Reports": "https://github.com/runawaydevil/organizer-movies/issues",
+        "Source": "https://github.com/runawaydevil/organizer-movies",
+        "Documentation": "https://github.com/runawaydevil/organizer-movies#readme",
     },
 )

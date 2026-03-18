@@ -66,6 +66,35 @@ def main():
     )
     
     parser.add_argument(
+        "--output-dir", "-o",
+        metavar="DIR",
+        help="Destination directory for organized folders (default: in-place)"
+    )
+
+    parser.add_argument(
+        "--network",
+        action="store_true",
+        help="Treat source/output as network paths (use network scanner)"
+    )
+
+    parser.add_argument(
+        "--llm-provider",
+        choices=["openai", "ollama"],
+        help="Override LLM provider (openai or ollama)"
+    )
+
+    parser.add_argument(
+        "--llm-model",
+        help="Override LLM model name"
+    )
+
+    parser.add_argument(
+        "--ollama-url",
+        default="http://localhost:11434",
+        help="Ollama base URL (default: http://localhost:11434)"
+    )
+
+    parser.add_argument(
         "--report",
         action="store_true",
         help="Generate PDF report of organized movies"
@@ -120,10 +149,24 @@ def main():
             config['tmdb_enabled'] = True
         
         config['openai_model'] = args.model
+
+        if args.llm_provider:
+            config['llm_provider'] = args.llm_provider
+        if args.llm_model:
+            config['llm_model'] = args.llm_model
+        if args.ollama_url:
+            config['ollama_base_url'] = args.ollama_url
+
+        output_dir = Path(args.output_dir) if args.output_dir else None
+        if output_dir is not None and (not output_dir.exists() or not output_dir.is_dir()):
+            print(f"Error: Output directory does not exist or is not a directory: {output_dir}")
+            return 1
         
-        # Validate required configuration
-        if not config.get('openai_api_key'):
-            print("❌ Error: OpenAI API key is required.")
+        # Validate required configuration (OpenAI key or Ollama when provider is ollama)
+        if config.get('llm_provider') == 'ollama':
+            pass  # Ollama does not require API key
+        elif not config.get('openai_api_key'):
+            print("Error: OpenAI API key is required (or use --llm-provider ollama).")
             print("   Use --openai-key or run --config to set it up.")
             return 1
         
@@ -134,7 +177,9 @@ def main():
         success = cli_organizer.organize_folder(
             source_path,
             dry_run=args.dry_run,
-            recursive=args.recursive
+            recursive=args.recursive,
+            output_dir=output_dir,
+            use_network=args.network
         )
         
         return 0 if success else 1

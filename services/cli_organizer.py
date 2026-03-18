@@ -8,6 +8,7 @@ Version: 0.1
 Repository: https://github.com/runawaydevil/organizer-movies.git
 """
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Dict, Any, List
@@ -15,9 +16,10 @@ from typing import Dict, Any, List
 # Add current directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.absolute()))
 
-from version import get_version_string, get_startup_banner, VERSION, AUTHOR
+from core.version import get_version_string, get_startup_banner, VERSION, AUTHOR
 from services.file_scanner import FileScanner
-from services.ai_analyzer import AIAnalyzer
+from services.fast_network_scanner import FastNetworkScanner
+from services.llm.factory import create_llm_analyzer
 from services.hybrid_analyzer import HybridAnalyzer
 from services.folder_creator import FolderCreator
 from services.file_mover import FileMover
@@ -51,42 +53,31 @@ class CLIOrganizer:
     
     def _init_services(self):
         """Initialize all required services"""
-        # Check if OpenAI API key is configured
-        if not self.config.get('openai_api_key'):
-            print("❌ ERROR: OpenAI API key not configured!")
-            print()
-            print("REQUIRED SETUP:")
-            print("1. Get OpenAI API key from: https://platform.openai.com/api-keys")
-            print("2. Run GUI first to configure: python main.py")
-            print("3. Go to Settings and enter your API key")
-            print("4. Then run CLI again")
-            print()
-            print("For detailed setup instructions, see: API_SETUP.md")
-            raise ValueError("OpenAI API key required but not configured")
-        
-        # Initialize analyzer (AI or Hybrid based on TMDB config)
+        provider = self.config.get("llm_provider") or "openai"
+        if provider == "openai" and not self.config.get("openai_api_key"):
+            print("ERROR: OpenAI API key not configured.")
+            print("Use --openai-key, run --config, or use --llm-provider ollama.")
+            raise ValueError("OpenAI API key required when llm_provider=openai")
+
         try:
-            if (self.config.get('tmdb_enabled') and 
-                self.config.get('tmdb_api_key') and 
-                self.config.get('tmdb_bearer_token')):
-                
-                print("🎬 Initializing Hybrid Analyzer (AI + TMDB)...")
+            self.analyzer = create_llm_analyzer(self.config)
+            provider_label = self.config.get("llm_provider") or "openai"
+            model = self.config.get("llm_model") or self.config.get("openai_model") or "gpt-4o-mini"
+            print(f"LLM: {provider_label} ({model})")
+
+            if (self.config.get("tmdb_enabled") and
+                self.config.get("tmdb_api_key") and
+                self.config.get("tmdb_bearer_token")):
+                print("Initializing Hybrid Analyzer (LLM + TMDB)...")
                 self.analyzer = HybridAnalyzer(
-                    openai_api_key=self.config['openai_api_key'],
-                    tmdb_api_key=self.config['tmdb_api_key'],
-                    tmdb_bearer_token=self.config['tmdb_bearer_token'],
-                    openai_model=self.config.get('openai_model', 'gpt-3.5-turbo')
+                    llm_analyzer=self.analyzer,
+                    tmdb_api_key=self.config["tmdb_api_key"],
+                    tmdb_bearer_token=self.config["tmdb_bearer_token"],
+                    cache_duration_days=self.config.get("tmdb_cache_duration_days", 7),
                 )
-                print("✅ Hybrid analyzer ready (AI + TMDB)")
+                print("Hybrid analyzer ready (LLM + TMDB)")
             else:
-                print("🤖 Initializing AI-only Analyzer...")
-                print("💡 Tip: Configure TMDB in GUI for better accuracy")
-                self.analyzer = AIAnalyzer(
-                    api_key=self.config['openai_api_key'],
-                    model=self.config.get('openai_model', 'gpt-3.5-turbo')
-                )
-                print("✅ AI analyzer ready")
-                
+                print("LLM-only analyzer ready (configure TMDB in GUI for better accuracy)")
         except Exception as e:
             print(f"❌ ERROR: Failed to initialize analyzer: {e}")
             print()
@@ -103,15 +94,36 @@ class CLIOrganizer:
             print("• See API_SETUP.md for help")
             raise
         
-        # Initialize other services
-        self.file_scanner = FileScanner()
-        self.folder_creator = FolderCreator(base_directory=".")
+        # File scanner and folder creator are created per run in organize_folder
         self.file_mover = FileMover(
-            file_pattern=self.config.get('file_naming_pattern', '{title} ({year}){extension}')
+            file_pattern=self.config.get('file_naming_pattern', '{title} ({year}){extension}'),
+            max_retries=self.config.get('network_retry_attempts', 3),
+            base_delay=self.config.get('network_retry_delay', 1.0)
         )
         self.report_generator = MovieReportGenerator()
+
+    @staticmethod
+    def _is_network_path(path) -> bool:
+        """Return True if path is a network path (UNC, mapped drive, or Linux network prefix)."""
+        s = str(path).strip()
+        if not s:
+            return False
+        if s.startswith("\\\\") or s.startswith("//"):
+            return True
+        if len(s) >= 2 and s[1] == ":" and os.name == "nt":
+            try:
+                import ctypes
+                drive = s[:2].upper()
+                if ctypes.windll.kernel32.GetDriveTypeW(drive + "\\") == 4:
+                    return True
+            except Exception:
+                pass
+        if s.startswith("/mnt/") or s.startswith("/net/") or s.startswith("/media/"):
+            return True
+        return False
     
-    def organize_folder(self, source_folder: Path, dry_run: bool = False, recursive: bool = True) -> bool:
+    def organize_folder(self, source_folder: Path, dry_run: bool = False, recursive: bool = True,
+                        output_dir: Path = None, use_network: bool = False) -> bool:
         """
         Organize movies in a folder
         
@@ -124,14 +136,22 @@ class CLIOrganizer:
             bool: True if successful
         """
         try:
-            print(f"📁 Scanning folder: {source_folder}")
-            
-            # Scan for movie files
-            movie_files = self.file_scanner.scan_directory(
-                str(source_folder),
-                recursive=recursive,
-                extensions=self.config.get('video_extensions', ['.mkv', '.mp4', '.avi'])
+            output_base = output_dir if output_dir is not None else source_folder
+            use_network_scanner = use_network or self._is_network_path(source_folder) or (
+                output_dir is not None and self._is_network_path(output_dir)
             )
+            video_extensions = self.config.get('video_extensions', [
+                '.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.3gp', '.ogv', '.ts', '.m2ts', '.mts'
+            ])
+
+            if use_network_scanner:
+                scanner = FastNetworkScanner(str(source_folder), video_extensions, recursive)
+            else:
+                scanner = FileScanner(str(source_folder), video_extensions, recursive)
+            folder_creator = FolderCreator(str(output_base))
+
+            print(f"Scanning folder: {source_folder}")
+            movie_files = scanner.scan_video_files()
             
             if not movie_files:
                 print("   No movie files found.")
@@ -173,15 +193,14 @@ class CLIOrganizer:
                     folder_name = f"{metadata.title} ({metadata.year})" if metadata.year else metadata.title
                     target_folder = file_path.parent / folder_name
                     
-                    print(f"   📂 Target folder: {folder_name}")
+                    print(f"   Target folder: {folder_name}")
                     
                     if dry_run:
-                        print(f"   🔄 Would move: {file_path.name} -> {folder_name}/")
+                        print(f"   Would move: {file_path.name} -> {folder_name}/")
                         organized_count += 1
                     else:
-                        # Create folder and move file
-                        self.folder_creator.base_directory = file_path.parent
-                        destination_folder = self.folder_creator.create_movie_folder(metadata)
+                        # Create folder under output_base and move file
+                        destination_folder = folder_creator.create_movie_folder(metadata)
                         
                         # Move file
                         success, message, final_path = self.file_mover.organize_movie_file(

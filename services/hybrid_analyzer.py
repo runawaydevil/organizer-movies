@@ -11,34 +11,35 @@ import logging
 from typing import Optional, Tuple, Dict, Any
 from pathlib import Path
 
-from .ai_analyzer import AIAnalyzer
 from .tmdb_service import TMDBService, TMDBMovieResult
 from models.movie_metadata import MovieMetadata
+
+try:
+    from .llm.base import BaseLLMAnalyzer
+except ImportError:
+    BaseLLMAnalyzer = None
 
 
 class HybridAnalyzer:
     """
-    Combines OpenAI and TMDB for enhanced movie identification
+    Combines LLM (OpenAI or Ollama) and TMDB for enhanced movie identification.
+    Accepts any BaseLLMAnalyzer by injection.
     """
     
-    def __init__(self, openai_api_key: str, tmdb_api_key: str, tmdb_bearer_token: str, 
-                 openai_model: str = "gpt-3.5-turbo"):
+    def __init__(self, llm_analyzer: "BaseLLMAnalyzer", tmdb_api_key: str, tmdb_bearer_token: str,
+                 cache_duration_days: int = 7):
         """
-        Initialize hybrid analyzer
+        Initialize hybrid analyzer.
         
         Args:
-            openai_api_key: OpenAI API key
+            llm_analyzer: LLM analyzer (OpenAI or Ollama)
             tmdb_api_key: TMDB API key
             tmdb_bearer_token: TMDB bearer token
-            openai_model: OpenAI model to use
+            cache_duration_days: TMDB cache duration
         """
         self.logger = logging.getLogger(__name__)
-        
-        # Initialize services
-        self.ai_analyzer = AIAnalyzer(openai_api_key, openai_model)
-        self.tmdb_service = TMDBService(tmdb_api_key, tmdb_bearer_token, cache_duration_days=7)
-        
-        # Test connections
+        self.ai_analyzer = llm_analyzer
+        self.tmdb_service = TMDBService(tmdb_api_key, tmdb_bearer_token, cache_duration_days=cache_duration_days)
         self._test_services()
     
     def _test_services(self):

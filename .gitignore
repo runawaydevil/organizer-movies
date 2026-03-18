@@ -13,6 +13,8 @@ openai_config.json
 user_config.json
 *.config.json
 *_config.json
+.config_key
+.key
 
 .kiro
 

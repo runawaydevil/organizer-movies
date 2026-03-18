@@ -15,7 +15,7 @@ from pathlib import Path
 current_dir = Path(__file__).parent.absolute()
 sys.path.insert(0, str(current_dir))
 
-from version import get_startup_banner, get_version_string, VERSION, AUTHOR
+from core.version import get_startup_banner, get_version_string, VERSION, AUTHOR
 
 def main():
     """Main entry point for Movie Organizer"""

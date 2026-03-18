@@ -17,16 +17,16 @@ PROJECT_NAME = "Movie Organizer"
 # Application Metadata
 APP_TITLE = f"{PROJECT_NAME} v{VERSION}"
 FULL_TITLE = f"{PROJECT_NAME} - {DESCRIPTION}"
-COPYRIGHT = f"© 2025 {AUTHOR}"
+COPYRIGHT = f"© 2025-2026 {AUTHOR}"
 
 # API Information
-REQUIRED_APIS = ["OpenAI API Key"]
+REQUIRED_APIS = ["OpenAI API Key or Ollama (local)"]
 OPTIONAL_APIS = ["TMDB API Key", "TMDB Bearer Token"]
 
 def get_version_info():
     """
     Get formatted version information
-    
+
     Returns:
         dict: Version information dictionary
     """
@@ -44,7 +44,7 @@ def get_version_info():
 def get_version_string():
     """
     Get formatted version string for display
-    
+
     Returns:
         str: Formatted version string
     """
@@ -53,7 +53,7 @@ def get_version_string():
 def get_startup_banner():
     """
     Get startup banner text
-    
+
     Returns:
         str: Formatted startup banner
     """

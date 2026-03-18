@@ -50,7 +50,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('../Images', 'Images'),
-        ('../version.py', '.'),
+        ('../core', 'core'),
         ('../README.md', '.'),
         ('../LICENSE', '.'),
         ('../docs', 'docs'),
